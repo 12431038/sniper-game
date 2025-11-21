@@ -2,21 +2,21 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>スナイパーゲーム（超修正版）</title>
+<title>スナイパーゲーム（最新版）</title>
 <style>
 body { margin:0; overflow:hidden; background:#000; color:#fff; font-family:sans-serif; }
 #introArea, #gameArea, #endArea { position:relative; width:100vw; height:100vh; }
 #introImg, #introCamera, #endImg, #sniperImg { position:absolute; width:100%; height:100%; object-fit:cover; }
 #introCamera { width:200px; height:150px; bottom:20px; right:20px; border:2px solid #fff; z-index:5; display:none; transform:scaleX(-1); }
 #startButton { position:absolute; bottom:20px; left:50%; transform:translateX(-50%); padding:15px 30px; font-size:20px; cursor:pointer; z-index:10; }
-#restartButton { position:absolute; bottom:20px; left:25%; transform:translateX(-50%); padding:15px 30px; font-size:20px; cursor:pointer; z-index:10; }
+#restartButton { position:absolute; bottom:20px; left:20%; transform:translateX(-50%); padding:15px 30px; font-size:20px; cursor:pointer; z-index:10; }
 #gameArea { display:none; overflow:hidden; }
 #sniperImg { position:absolute; left:0; top:0; width:50vw; height:100vh; object-fit:cover; }
 #camera { position:absolute; right:0; top:0; width:50vw; height:100vh; object-fit:cover; border-left:2px solid #fff; transform:scaleX(-1); }
 #overlay { position:absolute; right:0; top:0; width:50vw; height:100vh; pointer-events:none; }
-#scope { position:absolute; width:300px; height:300px; border:3px solid red; border-radius:50%; pointer-events:none; z-index:5; transition:left 0.2s, top 0.2s; }
+#scope { position:absolute; width:250px; height:250px; border:3px solid red; border-radius:50%; pointer-events:none; z-index:5; }
 #timer { position:absolute; bottom:10px; right:10px; font-size:24px; background:rgba(0,0,0,0.5); padding:5px 10px; border-radius:5px; z-index:10; }
-#hitEffect { position:absolute; width:200px; height:200px; pointer-events:none; display:none; z-index:20; }
+#hitEffect { position:absolute; width:250px; height:250px; pointer-events:none; display:none; z-index:20; }
 </style>
 </head>
 <body>
@@ -112,8 +112,8 @@ async function startGameplay(){
   resizeOverlay();
 
   // 初期照準
-  let scopeX = Math.random()*(overlay.width-300);
-  let scopeY = Math.random()*(overlay.height-300);
+  let scopeX = overlay.width/2 - 125;
+  let scopeY = overlay.height/2 - 125;
   scope.style.left = (camera.offsetLeft + scopeX) + "px";
   scope.style.top = (camera.offsetTop + scopeY) + "px";
 
@@ -121,13 +121,13 @@ async function startGameplay(){
   function moveScopeRandom(){
     const camWidth = overlay.width;
     const camHeight = overlay.height;
-    scopeX = Math.random()*(camWidth-300);
-    scopeY = Math.random()*(camHeight-300);
+    scopeX = Math.random() * (camWidth - 250);
+    scopeY = Math.random() * (camHeight - 250);
     scope.style.left = (camera.offsetLeft + scopeX) + "px";
     scope.style.top = (camera.offsetTop + scopeY) + "px";
   }
   moveScopeRandom();
-  scopeTimer = setInterval(moveScopeRandom, 500); // 俊敏に
+  scopeTimer = setInterval(moveScopeRandom, 800); // 俊敏化
 
   // タイマー
   let remaining = gameTime;
@@ -159,15 +159,17 @@ async function startGameplay(){
       const width = det.box.width * scaleX;
       const height = det.box.height * scaleY;
 
-      const flippedX = x; // 左右反転修正
-      const faceRect  = { left: flippedX, top: y, right: flippedX+width, bottom: y+height };
+      // 左右反転に合わせた顔枠座標
+      const drawX = overlay.width - (x + width);
+      const drawY = y;
 
-      // 顔枠表示
-      ctx.strokeStyle = "lime";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(faceRect.left, faceRect.top, width, height);
+      // 顔枠を描画
+      ctx.strokeStyle = 'lime';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(drawX, drawY, width, height);
 
-      const scopeRect = { left: scopeX, top: scopeY, right: scopeX+300, bottom: scopeY+300 };
+      const scopeRect = { left: scopeX, top: scopeY, right: scopeX+250, bottom: scopeY+250 };
+      const faceRect  = { left: drawX, top: drawY, right: drawX+width, bottom: drawY+height };
       const overlap = !( scopeRect.right < faceRect.left ||
                          scopeRect.left > faceRect.right ||
                          scopeRect.bottom < faceRect.top ||
@@ -178,15 +180,11 @@ async function startGameplay(){
 
     if(hit){
       if(!overlapStartTime) overlapStartTime = performance.now();
-      scope.style.borderColor = "yellow"; // 重なったら光る
       if(performance.now() - overlapStartTime >= 1000){ // 1秒でアウト
         showHitEffect(scopeX, scopeY);
         return;
       }
-    } else {
-      overlapStartTime = null;
-      scope.style.borderColor = "red"; // 通常色
-    }
+    } else { overlapStartTime = null; }
 
     requestAnimationFrame(detectFaces);
   }
@@ -248,15 +246,8 @@ function formatTime(sec){
 startButton.addEventListener("click", async () => {
   startButton.disabled = true;
   startButton.textContent = "モデル読み込み中…";
-  try {
-    await loadModels();
-  } catch (e) {
-    alert("モデルの読み込みに失敗しました。");
-    console.error(e);
-    startButton.disabled = false;
-    startButton.textContent = "ゲーム開始";
-    return;
-  }
+  try { await loadModels(); } 
+  catch (e){ alert("モデルの読み込みに失敗しました。 console参照"); console.error(e); startButton.disabled=false; startButton.textContent="ゲーム開始"; return; }
   startButton.textContent = "読み込み完了。イントロへ…";
   await new Promise(r => setTimeout(r,400));
   showIntro();
