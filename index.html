@@ -2,54 +2,31 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>スナイパーゲーム（ランダム照準版）</title>
+<title>スナイパーゲーム（修正版）</title>
 <style>
 body { margin:0; overflow:hidden; background:#000; color:#fff; font-family:sans-serif; }
 #introArea, #gameArea, #endArea { position:relative; width:100vw; height:100vh; }
 #introImg, #introCamera, #endImg, #sniperImg { position:absolute; width:100%; height:100%; object-fit:cover; }
 #introCamera { width:200px; height:150px; bottom:20px; right:20px; border:2px solid #fff; z-index:5; display:none; transform:scaleX(-1); }
 #startButton { position:absolute; bottom:20px; left:50%; transform:translateX(-50%); padding:15px 30px; font-size:20px; cursor:pointer; z-index:10; }
-
-/* ←■■ 変更：再スタートボタンの位置を左側に移動 */
-#restartButton {
-  position:absolute;
-  bottom:20px;
-  left:25%;     /* 画面を4分割した左から2つ目の中心あたり */
-  transform:translateX(-50%);
-  padding:15px 30px;
-  font-size:20px;
-  cursor:pointer;
-  z-index:10;
-}
-
+#restartButton { position:absolute; bottom:20px; left:25%; transform:translateX(-50%); padding:15px 30px; font-size:20px; cursor:pointer; z-index:10; }
 #gameArea { display:none; overflow:hidden; }
 #sniperImg { position:absolute; left:0; top:0; width:50vw; height:100vh; object-fit:cover; }
 #camera { position:absolute; right:0; top:0; width:50vw; height:100vh; object-fit:cover; border-left:2px solid #fff; transform:scaleX(-1); }
 #overlay { position:absolute; right:0; top:0; width:50vw; height:100vh; pointer-events:none; }
 #scope { position:absolute; width:200px; height:200px; border:3px solid red; border-radius:50%; pointer-events:none; z-index:5; }
 #timer { position:absolute; bottom:10px; right:10px; font-size:24px; background:rgba(0,0,0,0.5); padding:5px 10px; border-radius:5px; z-index:10; }
-
-/* ←■■ アウト時に表示する画像 */
-#hitEffect {
-  position:absolute;
-  width:200px; 
-  height:200px;
-  pointer-events:none;
-  display:none;
-  z-index:20;
-}
+#hitEffect { position:absolute; width:200px; height:200px; pointer-events:none; display:none; z-index:20; }
 </style>
 </head>
 <body>
 
-<!-- イントロ画面 -->
 <div id="introArea">
   <img id="introImg" src="画像9.png" alt="">
   <video id="introCamera" autoplay muted></video>
   <button id="startButton">ゲーム開始</button>
 </div>
 
-<!-- プレイ画面 -->
 <div id="gameArea">
   <img id="sniperImg" src="画像4.png" alt="">
   <video id="camera" autoplay muted></video>
@@ -59,14 +36,12 @@ body { margin:0; overflow:hidden; background:#000; color:#fff; font-family:sans-
   <div id="timer">1:00</div>
 </div>
 
-<!-- 終了画面 -->
 <div id="endArea" style="display:none;">
   <img id="endImg" src="" alt="">
   <button id="restartButton" style="display:none;">もう一度遊ぶ</button>
 </div>
 
 <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
-
 <script>
 const startButton = document.getElementById("startButton");
 const restartButton = document.getElementById("restartButton");
@@ -83,11 +58,12 @@ const timerDisplay = document.getElementById("timer");
 const endArea = document.getElementById("endArea");
 const endImg = document.getElementById("endImg");
 
-let videoStream, scopeTimer, overlapTimer, countdownInterval;
+let videoStream, scopeTimer, countdownInterval;
 let gameTime = 60;
 const introImages = ["画像1.png","画像2.png","画像3.png"];
 const sniperImages = ["画像4.png","画像5.png","画像6.png"];
 const endImages = { lose:"画像7.png", win:"画像8.png" };
+let gameEnded = false;
 
 // モデルロード
 async function loadModels(){
@@ -108,13 +84,9 @@ async function showIntro(){
       introCamera.style.left = "50%";
       introCamera.style.top = "50%";
       introCamera.style.transform = "translate(-50%, -50%) scaleX(-1)";
-      try {
-        videoStream = await navigator.mediaDevices.getUserMedia({ video:true });
-        introCamera.srcObject = videoStream;
-      } catch (e) { alert("カメラアクセスを許可してください"); return; }
-    } else {
-      introCamera.style.display = "none";
-    }
+      try { videoStream = await navigator.mediaDevices.getUserMedia({ video:true }); introCamera.srcObject = videoStream; } 
+      catch(e){ alert("カメラアクセスを許可してください"); return; }
+    } else { introCamera.style.display = "none"; }
     await new Promise(res => setTimeout(res, 6000));
   }
   introArea.style.display = "none";
@@ -123,12 +95,11 @@ async function showIntro(){
 
 // ゲーム開始
 async function startGameplay(){
+  gameEnded = false;
   gameArea.style.display = "block";
 
-  try {
-    videoStream = await navigator.mediaDevices.getUserMedia({ video:true });
-    camera.srcObject = videoStream;
-  } catch (e) { alert("カメラアクセスを許可してください"); return; }
+  try { videoStream = await navigator.mediaDevices.getUserMedia({ video:true }); camera.srcObject = videoStream; } 
+  catch(e){ alert("カメラアクセスを許可してください"); return; }
 
   sniperImg.src = sniperImages[0];
   setTimeout(()=>{ sniperImg.src = sniperImages[1]; }, 20000);
@@ -136,10 +107,7 @@ async function startGameplay(){
 
   const ctx = overlay.getContext('2d');
 
-  function resizeOverlay(){
-    overlay.width = camera.offsetWidth;
-    overlay.height = camera.offsetHeight;
-  }
+  function resizeOverlay(){ overlay.width = camera.offsetWidth; overlay.height = camera.offsetHeight; }
   await new Promise(res => setTimeout(res, 250));
   resizeOverlay();
 
@@ -148,7 +116,6 @@ async function startGameplay(){
   let scopeY = overlay.height/2 - 100;
   scope.style.left = (camera.offsetLeft + scopeX) + "px";
   scope.style.top = (camera.offsetTop + scopeY) + "px";
-  overlapTimer = 0;
 
   // ランダム移動
   function moveScopeRandom(){
@@ -160,7 +127,6 @@ async function startGameplay(){
     scopeY = centerY + (Math.random()-0.5)*camHeight/2 - 100;
     scope.style.left = (camera.offsetLeft + scopeX) + "px";
     scope.style.top = (camera.offsetTop + scopeY) + "px";
-    overlapTimer = 0;
   }
   moveScopeRandom();
   scopeTimer = setInterval(moveScopeRandom, 2000);
@@ -174,7 +140,10 @@ async function startGameplay(){
     if(remaining <= 0){ endGame(true); }
   }, 1000);
 
+  let overlapStartTime = null;
+
   async function detectFaces(){
+    if(gameEnded){ return; }
     if(camera.readyState < 2){ requestAnimationFrame(detectFaces); return; }
 
     const options = new faceapi.TinyFaceDetectorOptions({ inputSize:416, scoreThreshold:0.3 });
@@ -205,21 +174,20 @@ async function startGameplay(){
     });
 
     if(hit){
-      overlapTimer += 33;
-      if(overlapTimer >= 2000){   // 2秒でアウト
-        showHitEffect(scopeX, scopeY);  // ←■■ 追加：アウト表示
+      if(!overlapStartTime) overlapStartTime = performance.now();
+      if(performance.now() - overlapStartTime >= 2000){
+        showHitEffect(scopeX, scopeY);
         return;
       }
-    } else {
-      overlapTimer = 0;
-    }
+    } else { overlapStartTime = null; }
+
     requestAnimationFrame(detectFaces);
   }
 
   detectFaces();
 }
 
-/* ←■■ アウト時の表示（照準位置に1秒だけ画像10.png を表示） */
+// アウト表示
 function showHitEffect(x, y){
   clearInterval(scopeTimer);
   clearInterval(countdownInterval);
@@ -227,6 +195,8 @@ function showHitEffect(x, y){
   hitEffect.style.left = (camera.offsetLeft + x) + "px";
   hitEffect.style.top  = (camera.offsetTop + y) + "px";
   hitEffect.style.display = "block";
+
+  gameEnded = true;
 
   setTimeout(()=>{
     hitEffect.style.display = "none";
@@ -236,6 +206,7 @@ function showHitEffect(x, y){
 
 // 終了処理
 function endGame(win){
+  gameEnded = true;
   gameArea.style.display = "none";
   endArea.style.display = "block";
   endImg.src = win ? endImages.win : endImages.lose;
@@ -246,6 +217,7 @@ function endGame(win){
 restartButton.addEventListener("click", async ()=>{
   endArea.style.display = "none";
   restartButton.style.display = "none";
+  gameEnded = false;
 
   if(videoStream){
     videoStream.getTracks().forEach(track => track.stop());
